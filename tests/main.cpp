@@ -8,8 +8,6 @@ TEST_CASE("serialization", "[dstree]")
   dstree t;
   t.set_data(100LL);
 
-  std::cout << std::get<int64_t>(t.data()) << std::endl;
-
   t.insert(10LL);
   t.insert(-1.1);
   t.insert(2.0);
@@ -22,9 +20,6 @@ TEST_CASE("serialization", "[dstree]")
   t.serialize(vec.data(), vec.size());
 
   auto t2 = dstree::deserialize(vec.data(), vec.size());
-
-  std::cout << std::get<int64_t>(t.data()) << std::endl;
-  std::cout << std::get<int64_t>(t2.data()) << std::endl;
 
   REQUIRE(std::get<int64_t>(t2.data()) == 100LL);
   REQUIRE(std::get<int64_t>(t2.find(10LL).data()) == 10LL);
