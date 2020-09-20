@@ -22,22 +22,10 @@ struct node_value
 {
   static constexpr size_t struct_size = 9;
 
-  node_value() noexcept
-    : node_value(0LL)
-  {
-  }
-
-  node_value(int64_t value) noexcept
-  {
-    t = type::integer;
-    data.integer = value;
-  }
-
-  node_value(double value) noexcept
-  {
-    t = type::floating_point;
-    data.floating_point = value;
-  }
+  node_value() noexcept;
+  node_value(int64_t value, std::vector<uint8_t>* parent = nullptr) noexcept;
+  node_value(double value, std::vector<uint8_t>* parent = nullptr) noexcept;
+  node_value(const char* value, std::vector<uint8_t>* parent) noexcept;
 
   enum class type : uint8_t
   {
@@ -104,4 +92,7 @@ void free_child_range(std::vector<uint8_t>& parent, uint64_t begin,
 std::pair<child*, child*> get_valid_childs_range(uint8_t* parent,
                                                  uint64_t node_id);
 void set_value(uint8_t* parent, uint64_t node_id, node_value new_value);
+uint64_t create_string(std::vector<uint8_t>& parent, const char* str);
+void destroy_string(std::vector<uint8_t>& parent, uint64_t pos);
+const char* get_string(uint8_t* parent, uint64_t pos);
 }

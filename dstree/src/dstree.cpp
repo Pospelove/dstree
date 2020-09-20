@@ -21,17 +21,22 @@ struct child_node
   uint64_t node_id = ~0;
 };
 
-dstree_::node_value key_to_internal_format(const dstree::key& key)
+dstree_::node_value key_to_internal_format(const dstree::key& key,
+                                           std::vector<uint8_t>& holder)
 {
-  return std::visit([](const auto& v) { return dstree_::node_value(v); }, key);
+  return std::visit(
+    [&](const auto& v) { return dstree_::node_value(v, &holder); }, key);
 }
 
-dstree::key key_to_interface_format(const dstree_::node_value& value)
+dstree::key key_to_interface_format(const dstree_::node_value& value,
+                                    uint8_t* holder)
 {
   if (value.t == dstree_::node_value::type::integer) {
     return value.data.integer;
   } else if (value.t == dstree_::node_value::type::floating_point) {
     return value.data.floating_point;
+  } else if (value.t == dstree_::node_value::type::string_index) {
+    return dstree_::get_string(holder, value.data.string_index);
   } else {
     throw std::runtime_error("anomaly, unknown node_value type");
   }
@@ -73,7 +78,7 @@ dstree::dstree(const key& data)
   : dstree()
 {
   dstree_::set_value(pimpl->root_owning->holder.data(), 0,
-                     key_to_internal_format(data));
+                     key_to_internal_format(data, pimpl->root_owning->holder));
 }
 
 dstree::dstree(const key& data, dstree* parent, uint64_t node_id)
@@ -130,8 +135,9 @@ dstree dstree::insert(const key& k)
   if (!root->root_owning)
     throw std::runtime_error("insert is only available in owning mode");
 
-  const auto child_node_id = dstree_::insert(
-    root->root_owning->holder, my_node_id, key_to_internal_format(k));
+  const auto child_node_id =
+    dstree_::insert(root->root_owning->holder, my_node_id,
+                    key_to_internal_format(k, root->root_owning->holder));
 
   return dstree(k, this, child_node_id);
 }
@@ -156,7 +162,8 @@ dstree::key dstree::data() const
 {
   const uint64_t my_node_id = pimpl->child ? pimpl->child->node_id : 0;
   return key_to_interface_format(
-    dstree_::get_node(pimpl->get_data(), my_node_id)->value);
+    dstree_::get_node(pimpl->get_data(), my_node_id)->value,
+    pimpl->get_data());
 }
 
 void dstree::for_each_child(const for_each_callback& callback)
@@ -166,18 +173,30 @@ void dstree::for_each_child(const for_each_callback& callback)
     dstree_::get_valid_childs_range(pimpl->get_data(), my_node_id);
   for (auto it = begin; it != end; ++it) {
     if (auto child_node = dstree_::get_node(pimpl->get_data(), it->node_id)) {
-      dstree child{ key_to_interface_format(child_node->value), this,
-                    it->node_id };
+      dstree child{ key_to_interface_format(child_node->value,
+                                            pimpl->get_data()),
+                    this, it->node_id };
       callback(child);
     }
   }
+}
+
+namespace {
+bool strings_equal(const dstree::key& k1, const dstree::key& k2)
+{
+  try {
+    return !strcmp(std::get<const char*>(k1), std::get<const char*>(k2));
+  } catch (...) {
+    return false;
+  }
+}
 }
 
 void dstree::for_each_matching_child(const key& k,
                                      const for_each_callback& callback)
 {
   for_each_child([&](dstree& child) {
-    if (child.data() == k)
+    if (child.data() == k || strings_equal(k, child.data()))
       callback(child);
   });
 }
@@ -195,8 +214,20 @@ dstree dstree::find(const key& k)
   return std::move(*res);
 }
 
+size_t dstree::size()
+{
+  size_t n = 0;
+  for_each_child([&](auto&) { ++n; });
+  return n;
+}
+
 void dstree::set_data(key k)
 {
+  auto root = pimpl->get_root();
+  if (!root->root_owning)
+    throw std::runtime_error("set_data is only available in owning mode");
+
   const uint64_t my_node_id = pimpl->child ? pimpl->child->node_id : 0;
-  dstree_::set_value(pimpl->get_data(), my_node_id, key_to_internal_format(k));
+  dstree_::set_value(pimpl->get_data(), my_node_id,
+                     key_to_internal_format(k, root->root_owning->holder));
 }

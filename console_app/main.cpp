@@ -61,6 +61,7 @@ int main(int argc, char* argv[])
     t.insert(2.015);
     t.insert(1000LL);
     t.find(1000LL).insert(2000LL);
+    t.find(1000LL).insert("abcd");
     content.resize(t.serialize(nullptr, 0));
     t.serialize(content.data(), content.size());
   }

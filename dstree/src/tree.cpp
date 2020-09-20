@@ -3,12 +3,12 @@
 #include <algorithm>
 
 namespace {
-const dstree_::array_index string_table_id(0), node_table_id(1),
-  child_table_id(2);
+const dstree_::array_index node_table_id(0), child_table_id(1),
+  string_table_id(2);
 const auto schema = dstree_::arrays_schema()
-                      .add<int8_t>()
                       .add<dstree_::node>()
-                      .add<dstree_::child>();
+                      .add<dstree_::child>()
+                      .add<int8_t>();
 }
 
 namespace {
@@ -23,6 +23,12 @@ auto& get_child_array(uint8_t* parent)
   return dstree_::array<dstree_::child>::get(
     parent, dstree_::arrays_start(dstree_::header::struct_size),
     child_table_id, schema);
+}
+auto& get_string_array(uint8_t* parent)
+{
+  return dstree_::array<char>::get(
+    parent, dstree_::arrays_start(dstree_::header::struct_size),
+    string_table_id, schema);
 }
 auto& get_header(uint8_t* parent)
 {
@@ -316,4 +322,59 @@ void dstree_::set_value(uint8_t* parent, uint64_t node_id,
 {
   if (auto n = get_node(parent, node_id))
     n->value = new_value;
+}
+
+uint64_t dstree_::create_string(std::vector<uint8_t>& parent, const char* str)
+{
+  auto str_size = strlen(str) + 1;
+  while (1) {
+    auto arr = &get_string_array(parent.data());
+    if (arr->size >= str_size) {
+      auto arr_data = arr->data();
+      for (int i = 0; i < arr->size - str_size; ++i) {
+        if (std::all_of(&arr_data[i], &arr_data[i] + str_size,
+                        [](uint8_t byte) { return !byte; })) {
+          memcpy(&arr_data[i], str, str_size);
+          return i;
+        }
+      }
+    }
+    arr->resize(arr->size + str_size, parent);
+  }
+}
+
+void dstree_::destroy_string(std::vector<uint8_t>& parent, uint64_t pos)
+{
+  auto& arr = get_string_array(parent.data());
+  for (uint64_t i = pos; arr.data()[i]; ++i)
+    arr.data()[i] = 0;
+}
+
+const char* dstree_::get_string(uint8_t* parent, uint64_t pos)
+{
+  return &get_string_array(parent).data()[pos];
+}
+
+dstree_::node_value::node_value() noexcept
+  : node_value(0LL, nullptr)
+{
+}
+
+dstree_::node_value::node_value(int64_t value, std::vector<uint8_t>*) noexcept
+{
+  t = type::integer;
+  data.integer = value;
+}
+
+dstree_::node_value::node_value(double value, std::vector<uint8_t>*) noexcept
+{
+  t = type::floating_point;
+  data.floating_point = value;
+}
+
+dstree_::node_value::node_value(const char* value,
+                                std::vector<uint8_t>* parent) noexcept
+{
+  t = type::string_index;
+  data.string_index = dstree_::create_string(*parent, value);
 }

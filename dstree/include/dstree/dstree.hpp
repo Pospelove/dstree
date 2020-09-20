@@ -11,7 +11,7 @@ public:
     owning,
     non_owning,
   };
-  using key = std::variant<int64_t, double>;
+  using key = std::variant<int64_t, double, const char*>;
   using for_each_callback = std::function<void(dstree&)>;
 
   dstree();
@@ -28,6 +28,7 @@ public:
   void for_each_matching_child(const key& k,
                                const for_each_callback& callback);
   dstree find(const key& k);
+  size_t size();
 
   void set_data(key k);
 
